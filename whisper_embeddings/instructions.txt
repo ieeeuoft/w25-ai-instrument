@@ -1,0 +1,8 @@
+1. Connect to Raspberry Pi.
+2. To run, type this in Pi Terminal:
+
+cd Downloads/clean_env/bin/
+source ./activate
+
+Navigate back to Downloads (cd, then cd Downloads/)
+python whisper_embeddings.py
