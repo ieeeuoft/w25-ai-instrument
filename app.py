@@ -145,6 +145,49 @@ def search_embeddings():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route('/search_and_store', methods=['GET'])
+def search_and_store():
+    query = request.args.get('query', 'nature')  # Default query: 'nature'
+    try:
+        # Fetch data from Freesound API
+        url = "https://freesound.org/apiv2/search/text/"
+        params = {
+            "query": query,
+            "fields": "id,name,previews,description",
+            "token": FREESOUND_API_KEY,
+            "page_size": 1  # Only get the top result
+        }
+        response = requests.get(url, params=params)
+        response.raise_for_status()
+        results = response.json().get('results', [])
+
+        if not results:
+            return jsonify({"error": "No results found"}), 404
+
+        # Get the top result
+        top_sound = results[0]
+        sound_metadata = {
+            "id": top_sound["id"],
+            "name": top_sound["name"],
+            "description": top_sound["description"],
+            "preview": top_sound["previews"]["preview-lq-mp3"]
+        }
+
+        # Generate embedding for the description
+        embedding = model.encode([sound_metadata["description"]])[0].tolist()
+
+        # Append to CSV
+        save_to_csv([sound_metadata], [embedding], filename='sounds.csv')
+
+        # Push to Pinecone
+        push_to_pinecone([sound_metadata], [embedding])
+
+        return jsonify({"message": "Sound added successfully", "data": sound_metadata})
+
+    except requests.exceptions.RequestException as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route('/test', methods=['POST'])
 def test():
     return jsonify({"message": "POST request received"})
