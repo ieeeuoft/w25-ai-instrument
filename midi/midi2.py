@@ -1,7 +1,6 @@
 import rtmidi
 import soundfile as sf
 import sounddevice as sd
-from playsound import playsound
 import librosa
 import time
 import threading
@@ -34,13 +33,17 @@ def apply_fade(audio, fade_samples, fade_out=False):
 def monitor_midi():
     midi_in = rtmidi.MidiIn()
     midi_out = rtmidi.MidiOut()
+    print(midi_in.get_ports())
     if midi_in.get_port_count() > 0:
-        midi_in.open_port(0)
-        midi_out.open_port(0)
+        midi_in.open_port(1)
+        midi_out.open_port(1)
         print('listening')
         while True:
             msg = midi_in.get_message()
+            if msg:
+                print(msg)
             if msg and msg[0][0] == 144 and msg[0][2] != 0:
+				print('yes')
                 print(msg)
                 play_sample(msg[0][1] - 60)
 
