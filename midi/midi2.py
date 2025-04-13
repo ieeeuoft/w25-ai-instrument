@@ -7,8 +7,6 @@ import threading
 import numpy as np
 from pedalboard import Pedalboard, Chorus, Reverb
 
-sample_path = 'C Major Piano.wav'
-sound, sr = librosa.load(sample_path)
 
 reverb_board = Pedalboard([Reverb(room_size=0.25)])
 chorus_board = Pedalboard([Chorus()])
@@ -30,22 +28,29 @@ def apply_fade(audio, fade_samples, fade_out=False):
     fade = np.linspace(1, 0, fade_samples) if fade_out else np.linspace(0, 1, fade_samples)
     return audio * fade
 
-def monitor_midi():
+def monitor_midi(sample_path='C Major Piano.wav'):
     midi_in = rtmidi.MidiIn()
     midi_out = rtmidi.MidiOut()
+    sound, sr = librosa.load(sample_path)
     print(midi_in.get_ports())
     if midi_in.get_port_count() > 0:
-        midi_in.open_port(1)
-        midi_out.open_port(1)
+        midi_in.open_port(0)
+        midi_out.open_port(0)
         print('listening')
         while True:
             msg = midi_in.get_message()
             if msg:
                 print(msg)
             if msg and msg[0][0] == 144 and msg[0][2] != 0:
-				print('yes')
-                print(msg)
-                play_sample(msg[0][1] - 60)
+                # Stop any currently playing audio before playing new sample
+                global current_stream, current_thread, stop_flag
+                if current_stream is not None:
+                    stop_flag = True
+                    if current_thread is not None:
+                        current_thread.join()
+                    current_stream.stop()
+                    current_stream = None
+                play_sample(msg[0][1] - 60, sound, sr)
 
 def play_audio(y, sr):
     """ Play audio in real-time with interruption support """
@@ -112,26 +117,20 @@ def play_audio(y, sr):
 def save_sample(sample, sr):
     sf.write('output.wav', sample, sr)
 
-def play_sample(pitch):
+def play_sample(pitch, sound, sr):
     print('changing pitch')
     sample = librosa.effects.pitch_shift(sound, sr=sr, n_steps=pitch)
     play_audio(sample, sr)
     # save_sample(sample, sr)
     # playsound('output.wav', sr)
     
-def play_sample_with_pedalboard(pitch, pedalboard):
+def play_sample_with_pedalboard(pitch, pedalboard, sound, sr):
     sample = librosa.effects.pitch_shift(sound, sr=sr, n_steps=pitch)
     sample = apply_pedalboard(sample, sr, pedalboard)
     play_audio(sample, sr)
     
    
-# play_sample(0)
-# time.sleep(2)
-# play_sample_with_pedalboard(0, chorus_board)
-# time.sleep(2)
-# play_sample_with_pedalboard(0, reverb_board)
-monitor_midi()
-# play_sample(12)
-# print('hello')
-# time.sleep(0.5)
-# play_sample(0)
+   
+if __name__ == "__main__":
+    monitor_midi()
+
