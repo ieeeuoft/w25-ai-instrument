@@ -1,12 +1,19 @@
 import rtmidi
 import soundfile as sf
 import sounddevice as sd
-from playsound import playsound
 import librosa
 import time
 import threading
 import numpy as np
 from pedalboard import Pedalboard, Chorus, Reverb, Delay, Distortion
+import curses
+import sys
+import os
+
+# Add parent directory to the import path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from get_reading import get_reading
+
 
 sample_path = 'C Major Piano.wav'
 sound, sr = librosa.load(sample_path)
@@ -32,6 +39,15 @@ sound = sound.astype(np.float32)  # Convert the entire array once at the beginni
 
 # Add to global variables
 current_channel = 0  # 0 = left, 1 = right
+
+def get_pedalboard():
+    r1, r2 = get_reading()
+    r2 = r2 / 3.3
+    r1 = r1 / 3.3
+    print("reverb", r2)
+    print("chorus", r1)
+    pedalboard = Pedalboard([Reverb(room_size=r2), Chorus(mix=r1)])
+    return pedalboard
 
 def apply_pedalboard(audio, sr, pedalboard):
     return pedalboard(audio, sr)
@@ -126,17 +142,36 @@ def play_sample(pitch):
     # save_sample(sample, sr)
     # playsound('output.wav', sr)
     
-def play_sample_with_pedalboard(pitch, pedalboard):
+def play_sample_with_pedalboard(pitch):
     sample = librosa.effects.pitch_shift(sound, sr=sr, n_steps=pitch)
+    pedalboard = get_pedalboard()
     sample = apply_pedalboard(sample, sr, pedalboard)
     play_audio(sample, sr)
     
    
-play_sample(0)
-time.sleep(2)
-play_sample_with_pedalboard(0, chorus_board)
-time.sleep(2)
-play_sample_with_pedalboard(0, reverb_board)
+def keys(stdscr):
+    stdscr.nodelay(True)  # Don't block waiting for key press
+    stdscr.clear()
+    stdscr.addstr("Press keys A-H. Ctrl+C to quit.\n")
+
+    key_map = {'a': 0, 's': 1, 'd': 2, 'f': 3, 'g': 4, 'h': 5}
+
+    while True:
+        key = stdscr.getch()
+        if key != -1:
+            try:
+                char = chr(key)
+                if char in 'asdfgh':
+                    stdscr.addstr(f"You pressed: {char.upper()}\n")
+                    pitch_shift = key_map[char]  # Map 'a' to 0, 's' to 1, etc.
+                    play_sample_with_pedalboard(pitch_shift)
+                    stdscr.refresh()
+            except:
+                pass
+
+
+while True:
+    curses.wrapper(keys)
 # monitor_midi()
 # play_sample(12)
 # print('hello')
