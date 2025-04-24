@@ -1,52 +1,96 @@
+import numpy as np
 import soundfile as sf
 import sounddevice as sd
-import numpy as np
-import signal
+import rtmidi
+import threading
 
-# Your audio effect function (replace with pedalboard if needed)
-def effect_chain(input_block, sample_rate):
-    gain = 0.8
-    delayed = np.roll(input_block, 2000)
-    return gain * input_block + 0.3 * delayed
+data, samplerate = sf.read("C Major Piano.wav")
+original_note = 60
 
-# Graceful interrupt
-stop_flag = False
-def handle_interrupt(signum, frame):
-    global stop_flag
-    stop_flag = True
-signal.signal(signal.SIGINT, handle_interrupt)
+# Convert mono to stereo if needed
+if len(data.shape) == 1:
+    data = np.column_stack((data, data))  # Duplicate mono channel to create stereo
 
-# Audio file setup
-filename = 'C Major Piano.wav'
-block_size = 1024
+print(data.shape)
 
-with sf.SoundFile(filename) as f:
-    samplerate = f.samplerate
-    channels = f.channels
+# Keep track of active voices
+active_voices = []
+voices_lock = threading.Lock()
 
-    # Create an output stream
-    with sd.OutputStream(
-        samplerate=samplerate,
-        channels=channels,
-        blocksize=block_size,
-        dtype='float32'
-    ) as stream:
+# Basic pitch shift via naive resampling
+def pitch_shift(sample, semitones):
+    factor = 2 ** (semitones / 12.0)
+    indices = np.round(np.arange(0, len(sample), factor)).astype(int)
+    indices = indices[indices < len(sample)]
+    return sample[indices]
 
-        print("Streaming... Press Ctrl+C to stop.")
-        while not stop_flag and f.tell() < len(f):
-            block = f.read(block_size, dtype='float32')
+# Voice class to track each note
+class Voice:
+    def __init__(self, note, sample):
+        self.note = note
+        self.sample = sample
+        self.position = 0
 
-            # Handle end-of-file (padding if block is too short)
-            if len(block) < block_size:
-                block = np.pad(block, ((0, block_size - len(block)), (0, 0)), mode='constant')
+    def get_samples(self, frames):
+        end = self.position + frames
+        chunk = self.sample[self.position:end]
+        self.position = end
+        return chunk
 
-            # Apply your effect
-            # if channels == 1:
-            #     block = block[:, 0]  # Flatten for mono
-            processed = effect_chain(block, samplerate)
+    def is_done(self):
+        return self.position >= len(self.sample)
 
-            # Make sure shape matches output stream
-            if channels == 1:
-                stream.write(processed.reshape(-1, 1))
-            else:
-                stream.write(processed)
+# Stream callback to mix all voices
+def audio_callback(outdata, frames, time, status):
+    global active_voices
+    mix = np.zeros((frames, data.shape[1]), dtype=np.float32)
+
+    with voices_lock:
+        for voice in active_voices[:]:
+            chunk = voice.get_samples(frames)
+            if len(chunk) < frames:
+                # Pad with zeros if needed
+                chunk = np.pad(chunk, ((0, frames - len(chunk)), (0, 0)))
+            mix += chunk
+            if voice.is_done():
+                active_voices.remove(voice)
+
+    outdata[:] = mix
+
+# Set up audio stream
+stream = sd.OutputStream(channels=data.shape[1], samplerate=samplerate, callback=audio_callback)
+stream.start()
+
+# Handle MIDI input
+def midi_callback(message_data, time_stamp):
+    message, delta_time = message_data
+    status = message[0] & 0xF0
+    note = message[1]
+    velocity = message[2]
+
+    if status == 0x90 and velocity > 0:
+        semitone_shift = note - original_note
+        shifted = pitch_shift(data, semitone_shift).astype(np.float32)
+        voice = Voice(note, shifted)
+        with voices_lock:
+            active_voices.append(voice)
+
+# MIDI input setup
+midiin = rtmidi.MidiIn()
+ports = midiin.get_ports()
+if ports:
+    midiin.open_port(0)
+else:
+    midiin.open_virtual_port("Polyphonic Piano")
+midiin.set_callback(midi_callback)
+
+# Keep app alive
+print("Playing... Ctrl+C to stop.")
+try:
+    while True:
+        pass
+except KeyboardInterrupt:
+    print("Exiting.")
+    stream.stop()
+    stream.close()
+    midiin.close_port()

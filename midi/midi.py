@@ -12,7 +12,7 @@ import os
 
 # Add parent directory to the import path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from get_reading import get_reading
+# from get_reading import get_reading
 
 
 sample_path = 'C Major Piano.wav'
@@ -41,7 +41,7 @@ sound = sound.astype(np.float32)  # Convert the entire array once at the beginni
 current_channel = 0  # 0 = left, 1 = right
 
 def get_pedalboard():
-    r1, r2 = get_reading()
+    r1, r2 = 1, 1
     r2 = r2 / 3.3
     r1 = r1 / 3.3
     print("reverb", r2)
