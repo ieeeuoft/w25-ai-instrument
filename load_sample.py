@@ -1,8 +1,8 @@
-from midi.midi2 import monitor_midi, monitor_stop_flag
 from text_to_filename import text_to_filename
 from pynput import keyboard
 import threading
 import time
+import zmq
 
 class KeyMonitor:
     def __init__(self):
@@ -29,52 +29,42 @@ class KeyMonitor:
 
 def main():
     key_monitor = KeyMonitor()
-    midi_thread = None
-    global monitor_stop_flag
+    context = zmq.Context()
+    socket = context.socket(zmq.PUSH)  # Changed to PUSH socket
+    socket.connect("tcp://localhost:5556")  # Connect to a different port for PUSH/PULL
+    
+    print("Sample loader started. Waiting for input...")
     
     while True:
         try:
             # Get initial input
             text = input('Enter a description of the sound you want to load: ')
             filename = text_to_filename(text, 'samples.csv')
+            full_path = 'samples/' + filename
             
-            # Stop any existing MIDI thread
-            if midi_thread and midi_thread.is_alive():
-                monitor_stop_flag = True  # Signal the thread to stop
-                midi_thread.join(timeout=1.0)  # Wait for it to stop
-                if midi_thread.is_alive():
-                    print("Warning: Previous MIDI thread did not stop cleanly")
-            
-            # Reset stop flag and start new MIDI monitoring
-            monitor_stop_flag = False
-            midi_thread = threading.Thread(target=monitor_midi, args=('samples/' + filename,))
-            midi_thread.daemon = True  # Make thread daemon so it exits when main program exits
-            midi_thread.start()
+            # Send file change message
+            file_change_msg = ((255, full_path), 0)  # Type 255 for file change
+            socket.send_pyobj(file_change_msg)
+            print(f"Sent file change message for: {full_path}")
             
             print("Monitoring MIDI input. Press 'u' to change sample.")
             
             # Start keyboard monitoring
             key_monitor.start()
             
-            # Wait for key press or MIDI thread to finish
-            while not key_monitor.key_pressed and midi_thread.is_alive():
+            # Wait for key press
+            while not key_monitor.key_pressed:
                 time.sleep(0.1)
             
-            # Stop the current MIDI monitoring
+            # Reset for next sample
             if key_monitor.key_pressed:
                 print("\nChanging sample...")
-                monitor_stop_flag = True  # Signal the thread to stop
-                midi_thread.join(timeout=0.5)  # Wait for it to stop
-                midi_thread = None
-                filename = None
                 continue
                 
         except KeyboardInterrupt:
-            if midi_thread and midi_thread.is_alive():
-                monitor_stop_flag = True  # Signal the thread to stop
-                midi_thread.join(timeout=0.5)
-            
             key_monitor.stop()
+            socket.close()
+            context.term()
             print("Exiting...")
             break
 

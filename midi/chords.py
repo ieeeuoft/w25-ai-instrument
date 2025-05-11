@@ -2,6 +2,7 @@ import soundfile as sf
 import numpy as np
 import sounddevice as sd
 from scipy.signal import resample_poly
+import time
 
 chord_data = None
 chord_position = 0
@@ -64,13 +65,16 @@ stream = sd.OutputStream(samplerate=samplerate, channels=data.shape[1], blocksiz
 stream.start()
 
 # Example: Trigger a chord
-chord_data = get_chord("C,E,G", data.copy())
-chord_position = 0
+chord_data = get_chord("A,C,E", data.copy())
+chord_position = 0  # Reset position to start playing from beginning
 
 print("Chord triggered! Non-blocking playback. Ctrl+C to exit.")
+
+chord_data = get_chord("C,E,G", data.copy())
+chord_position = 0  # Reset position to start playing from beginning
 try:
     while True:
-        pass  # keep program alive
+        time.sleep(0.1)  # Keep the program running
 except KeyboardInterrupt:
     stream.stop()
     stream.close()

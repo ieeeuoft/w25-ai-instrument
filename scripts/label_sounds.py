@@ -5,12 +5,17 @@ import numpy as np
 from pathlib import Path
 import json
 
-SENTENCE_MODEL_PATH = '../whisper_embeddings/all-MiniLM-L6-v2'
+# Use the existing model path
+SENTENCE_MODEL_PATH = 'whisper_embeddings/all-MiniLM-L6-v2'
 
 # Define allowed audio file extensions
 AUDIO_FILE_EXTENSIONS = {'.wav', '.mp3'}
 
+# Initialize the model using the existing path
+print(f"Loading model from {SENTENCE_MODEL_PATH}...")
 model = SentenceTransformer(SENTENCE_MODEL_PATH)
+print("Model loaded successfully!")
+
 def compute_query_embedding(query, model):
     """Compute the embedding vector for the query text."""
     return model.encode(query)
@@ -32,7 +37,7 @@ def is_audio_file(file_path):
     return file_path.suffix.lower() in AUDIO_FILE_EXTENSIONS
 
 def main():
-    samples_dir = Path('../samples')
+    samples_dir = Path('samples')
     samples_csv = 'samples.csv'
     
     # Create CSV file with headers if it doesn't exist

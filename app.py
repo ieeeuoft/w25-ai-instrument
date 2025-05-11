@@ -4,7 +4,6 @@ import csv
 import json
 import requests
 import os
-import pinecone
 import pandas as pd
 import numpy as np
 from sentence_transformers import SentenceTransformer

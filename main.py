@@ -11,7 +11,7 @@ import whisper
 from midi.speaker import play_audio
 from sentence_transformers import SentenceTransformer
 from pedalboard import Pedalboard, Chorus, Reverb
-import get_reading
+import embedded.get_reading as get_reading
 import soundfile as sf
 import librosa
 
